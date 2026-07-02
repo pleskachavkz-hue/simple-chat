@@ -11,6 +11,22 @@ npm start
 
 Open http://localhost:3000 in multiple browser tabs to test real-time messaging.
 
+## Share on the internet
+
+Install Cloudflare Tunnel once:
+
+```bash
+brew install cloudflared
+```
+
+Then run:
+
+```bash
+npm run share
+```
+
+Copy the `https://....trycloudflare.com` URL from the output and share it. The URL changes each time you start the tunnel.
+
 ## Features
 
 - Username on join (saved in localStorage)

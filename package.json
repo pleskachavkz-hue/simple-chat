@@ -4,7 +4,8 @@
   "private": true,
   "description": "Simple one-page multi-user chat",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "share": "bash scripts/share.sh"
   },
   "dependencies": {
     "ws": "^8.18.0"

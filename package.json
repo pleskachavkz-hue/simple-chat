@@ -1,0 +1,12 @@
+{
+  "name": "simple-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simple one-page multi-user chat",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

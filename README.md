@@ -30,6 +30,7 @@ Copy the `https://....trycloudflare.com` URL from the output and share it. The U
 ## Features
 
 - Username on join (saved in localStorage)
+- Leave button clears saved username and disconnects
 - Real-time message broadcast
 - Online user count
 - Join/leave system messages

@@ -19,8 +19,18 @@ function broadcast(data, except) {
   }
 }
 
+function joinedUserCount() {
+  let count = 0;
+  for (const [, client] of clients) {
+    if (client.user) {
+      count++;
+    }
+  }
+  return count;
+}
+
 function broadcastUserCount() {
-  broadcast({ type: "users", count: clients.size });
+  broadcast({ type: "users", count: joinedUserCount() });
 }
 
 const server = http.createServer((req, res) => {
@@ -55,34 +65,48 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    if (data.type !== "message" || !data.user || !data.text) {
-      return;
-    }
-
-    const user = String(data.user).trim().slice(0, 32);
-    const text = String(data.text).trim().slice(0, 2000);
-    if (!user || !text) {
-      return;
-    }
-
     const client = clients.get(ws);
-    const isFirstMessage = !client.user;
-    client.user = user;
+    if (!client) {
+      return;
+    }
 
-    if (isFirstMessage) {
+    if (data.type === "join") {
+      if (client.user) {
+        return;
+      }
+
+      const user = String(data.user).trim().slice(0, 32);
+      if (!user) {
+        return;
+      }
+
+      client.user = user;
       broadcast({
         type: "system",
         text: `${user} joined`,
         time: formatTime(),
       });
+      broadcastUserCount();
+      return;
     }
 
-    broadcast({
-      type: "message",
-      user,
-      text,
-      time: formatTime(),
-    });
+    if (data.type === "message") {
+      if (!client.user) {
+        return;
+      }
+
+      const text = String(data.text).trim().slice(0, 2000);
+      if (!text) {
+        return;
+      }
+
+      broadcast({
+        type: "message",
+        user: client.user,
+        text,
+        time: formatTime(),
+      });
+    }
   });
 
   ws.on("close", () => {
@@ -97,8 +121,6 @@ wss.on("connection", (ws) => {
     clients.delete(ws);
     broadcastUserCount();
   });
-
-  broadcastUserCount();
 });
 
 server.listen(PORT, () => {

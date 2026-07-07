@@ -6,6 +6,15 @@ const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
 const clients = new Map();
+const HISTORY_LIMIT = 30;
+const messageHistory = [];
+
+function pushHistory(entry) {
+  messageHistory.push(entry);
+  if (messageHistory.length > HISTORY_LIMIT) {
+    messageHistory.shift();
+  }
+}
 
 function formatTime(date = new Date()) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -117,6 +126,12 @@ wss.on("connection", (ws) => {
           user: client.user,
         })
       );
+      ws.send(
+        JSON.stringify({
+          type: "history",
+          messages: messageHistory,
+        })
+      );
       broadcast({
         type: "system",
         text: `${user} joined`,
@@ -136,13 +151,15 @@ wss.on("connection", (ws) => {
         return;
       }
 
-      broadcast({
+      const payload = {
         type: "message",
         senderId: client.id,
         user: client.user,
         text,
         time: formatTime(),
-      });
+      };
+      pushHistory(payload);
+      broadcast(payload);
     }
   });
 

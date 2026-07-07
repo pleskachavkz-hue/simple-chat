@@ -274,7 +274,7 @@
         scrollToBottom();
       }
 
-      function appendMessage(user, text, time, isOwn) {
+      function appendMessage(user, text, time, isOwn, scroll = true) {
         const el = document.createElement("div");
         el.className = `message ${isOwn ? "own" : "other"}`;
 
@@ -288,6 +288,22 @@
         el.appendChild(meta);
         el.appendChild(body);
         messagesEl.appendChild(el);
+        if (scroll) {
+          scrollToBottom();
+        }
+      }
+
+      function appendHistory(messages) {
+        clearMessages();
+        for (const msg of messages) {
+          appendMessage(
+            msg.user,
+            msg.text,
+            msg.time,
+            msg.senderId === clientId,
+            false
+          );
+        }
         scrollToBottom();
       }
 
@@ -378,7 +394,6 @@
             clientId = data.id;
             username = data.user;
             localStorage.setItem(USERNAME_KEY, username);
-            clearMessages();
             overlay.classList.add("hidden");
             connecting = false;
             joinButton.disabled = false;
@@ -390,6 +405,8 @@
             connecting = false;
             joinButton.disabled = false;
             socket.close();
+          } else if (data.type === "history") {
+            appendHistory(data.messages || []);
           } else if (data.type === "message") {
             appendMessage(
               data.user,

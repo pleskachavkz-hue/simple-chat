@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,26 @@ function broadcastUserCount() {
   broadcast({ type: "users", count: joinedUserCount() });
 }
 
+function isNameTaken(name, exceptWs) {
+  const normalized = name.toLowerCase();
+  for (const [ws, client] of clients) {
+    if (
+      ws !== exceptWs &&
+      client.user &&
+      client.user.toLowerCase() === normalized
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sendJoinError(ws, text) {
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({ type: "join_error", text }));
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.url === "/" || req.url === "/index.html") {
     const filePath = path.join(__dirname, "index.html");
@@ -55,7 +76,7 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws) => {
-  clients.set(ws, { user: null });
+  clients.set(ws, { user: null, id: null });
 
   ws.on("message", (raw) => {
     let data;
@@ -72,15 +93,30 @@ wss.on("connection", (ws) => {
 
     if (data.type === "join") {
       if (client.user) {
+        sendJoinError(ws, "Already joined on this connection.");
         return;
       }
 
       const user = String(data.user).trim().slice(0, 32);
       if (!user) {
+        sendJoinError(ws, "Please enter a username.");
         return;
       }
 
+      if (isNameTaken(user, ws)) {
+        sendJoinError(ws, "That username is already in use.");
+        return;
+      }
+
+      client.id = crypto.randomUUID();
       client.user = user;
+      ws.send(
+        JSON.stringify({
+          type: "joined",
+          id: client.id,
+          user: client.user,
+        })
+      );
       broadcast({
         type: "system",
         text: `${user} joined`,
@@ -102,6 +138,7 @@ wss.on("connection", (ws) => {
 
       broadcast({
         type: "message",
+        senderId: client.id,
         user: client.user,
         text,
         time: formatTime(),

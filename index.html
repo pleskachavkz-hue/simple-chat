@@ -237,11 +237,22 @@
       const statusEl = document.getElementById("status");
 
       const USERNAME_KEY = "simple-chat-username";
-      let username = localStorage.getItem(USERNAME_KEY) || "";
+      let username = loadStoredUsername();
+      let clientId = null;
       let socket = null;
       let connecting = false;
       let connectionEpoch = 0;
       let voluntaryLeave = false;
+      let lastConnectError = "";
+
+      function loadStoredUsername() {
+        const stored = (localStorage.getItem(USERNAME_KEY) || "").trim().slice(0, 32);
+        if (!stored) {
+          localStorage.removeItem(USERNAME_KEY);
+          return "";
+        }
+        return stored;
+      }
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -249,6 +260,10 @@
 
       function scrollToBottom() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function clearMessages() {
+        messagesEl.replaceChildren();
       }
 
       function appendSystem(text, time) {
@@ -294,10 +309,10 @@
         joinButton.disabled = false;
         connecting = false;
         leaveButton.hidden = true;
-        if (message) {
+        if (message !== undefined) {
           setStatus(message);
-          usernameInput.focus();
         }
+        usernameInput.focus();
       }
 
       function connect() {
@@ -309,19 +324,19 @@
         const epoch = connectionEpoch;
         connecting = true;
         joinButton.disabled = true;
-        let joinedSession = false;
+        lastConnectError = "";
+        let hadSuccessfulJoin = false;
 
         const protocol = location.protocol === "https:" ? "wss:" : "ws:";
         socket = new WebSocket(`${protocol}//${location.host}`);
 
         socket.addEventListener("open", () => {
           socket.send(JSON.stringify({ type: "join", user: username }));
-          joinedSession = true;
-          overlay.classList.add("hidden");
-          connecting = false;
-          joinButton.disabled = false;
-          enableChat(true);
-          setStatus("");
+          setStatus("Joining...");
+        });
+
+        socket.addEventListener("error", () => {
+          lastConnectError = "Connection error.";
         });
 
         socket.addEventListener("close", () => {
@@ -330,20 +345,23 @@
           }
 
           enableChat(false);
+          clientId = null;
           socket = null;
 
           if (voluntaryLeave) {
             voluntaryLeave = false;
             showJoinOverlay("");
-            usernameInput.focus();
             return;
           }
 
-          if (joinedSession) {
+          if (hadSuccessfulJoin) {
             appendSystem("Disconnected. Join again to reconnect.");
             showJoinOverlay("");
           } else {
-            showJoinOverlay("Could not connect. Check the server and try again.");
+            showJoinOverlay(
+              lastConnectError ||
+                "Could not connect. Check the server and try again."
+            );
           }
         });
 
@@ -355,8 +373,30 @@
             return;
           }
 
-          if (data.type === "message") {
-            appendMessage(data.user, data.text, data.time, data.user === username);
+          if (data.type === "joined") {
+            hadSuccessfulJoin = true;
+            clientId = data.id;
+            username = data.user;
+            localStorage.setItem(USERNAME_KEY, username);
+            clearMessages();
+            overlay.classList.add("hidden");
+            connecting = false;
+            joinButton.disabled = false;
+            setStatus("");
+            enableChat(true);
+          } else if (data.type === "join_error") {
+            lastConnectError = data.text || "Could not join.";
+            setStatus(lastConnectError);
+            connecting = false;
+            joinButton.disabled = false;
+            socket.close();
+          } else if (data.type === "message") {
+            appendMessage(
+              data.user,
+              data.text,
+              data.time,
+              data.senderId === clientId
+            );
           } else if (data.type === "system") {
             appendSystem(data.text, data.time);
           } else if (data.type === "users") {
@@ -391,7 +431,9 @@
         voluntaryLeave = true;
         localStorage.removeItem(USERNAME_KEY);
         username = "";
+        clientId = null;
         usernameInput.value = "";
+        clearMessages();
         setStatus("");
         socket.close();
       }
@@ -429,7 +471,7 @@
         usernameInput.value = username;
         joinChat();
       } else {
-        usernameInput.focus();
+        showJoinOverlay("");
       }
     </script>
   </body>
